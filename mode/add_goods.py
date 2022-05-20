@@ -5,11 +5,12 @@ import json
 import os
 
 from faker import Faker
+from pymysql import IntegrityError
 
 from Data_import.common.Common import Common
 from Data_import.mode.login import Login
 from Data_import.mysql.mysql import Mysql
-from pachong1.userAgent import UserAgent
+from Data_import.mode.userAgent import UserAgent
 
 
 class Add_Goods:
@@ -96,7 +97,7 @@ class Add_Goods:
         except FileNotFoundError:
             pass
         local_con, local_cur = Mysql().con_db(user='root', pwd="root", host='localhost', db='goodspic', port=3306)
-        sql = 'select * from `product_data_1`'
+        sql = 'select * from product_data_1 limit 1925,9000;'
         infos = Mysql().dql(local_cur, sql)  # 查询所有商品数据
         print(len(infos))
         success = 0  # 计算成功数量
@@ -135,11 +136,11 @@ class Add_Goods:
 
                 costprice = info['cost_price']
                 if float(costprice) == 0:
-                    costprice = 0.00001
+                    costprice = 1
 
                 saleprice = info['price']
                 if float(saleprice) == 0:
-                    saleprice = 0.00001
+                    saleprice = 1
 
                 goodsdesc = info['product_description']
 
@@ -315,12 +316,20 @@ class Add_Goods:
         通过SQL语言直接插入数据库
         :return:
         """
+        try:
+            os.remove('../log/add_goods_by_sql_log')  # 删除先前日志文件
+        except FileNotFoundError:
+            pass
         con, cur = Mysql().con_db(user="root", pwd="OKmarts888.,", host="18.118.13.94", db="okmarts", port=3306)
         local_con, local_cur = Mysql().con_db(user='root', pwd="root", host='localhost', db='goodspic', port=3306)
-        sql = 'select * from `product_data_1`'
+        sql = 'select * from product_data_1 limit 1723,9000;'
         faker = Faker()
         infos = Mysql().dql(local_cur, sql)  # 查询所有商品数据
+        success = 0  # 计算成功数量
+        erro = 0  # 计算失败数量
+        n = 0  # 计算测试所在位置
         for info in infos:
+            n += 1
             print(info)
             query_spec_id = 'SELECT id FROM goods_spec ORDER BY RAND() LIMIT 1;'
             spec_id = Mysql().dql(local_cur, query_spec_id)[0]['id']
@@ -383,16 +392,26 @@ class Add_Goods:
 
             goodsno = faker.ean13()
 
-            insert_sql = f"""insert into goods(id,goodsImageS,goodsImageM,goodsImageL,name,productionPlace,typeid,brandid,warehouseid,amount,costPrice,salePrice,
-            goodsDesc,isRecommend,status,goodsWeights,goods_weight,specid,inquiry,url_key,meta_title,meta_keywords,meta_description,min_buy_count,goodsno) 
-            value("{sku}","{images_url}","{images_url}","{images_url}","{name}","{productionplace}","{typeid}","{brand_id}","{warehouse_id}","{amount}","{costprice}","{saleprice}",
-            "{goodsdesc}",1,1,"{goodsWeights}","{goods_weight}","{spec_id}","{inquiry}","{urlKey}","{metaTitle}","{metaKeywords}","{metaDescription}","{minBuyCount}","{goodsno}")"""
-            Mysql().dml(con,cur,insert_sql)
-
+            try:
+                insert_sql = f"""insert into goods(id,goodsImageS,goodsImageM,goodsImageL,name,productionPlace,typeid,brandid,warehouseid,amount,costPrice,salePrice,
+                            goodsDesc,isRecommend,status,goodsWeights,goods_weight,specid,inquiry,url_key,meta_title,meta_keywords,meta_description,min_buy_count,goodsno) 
+                            value("{sku}","{images_url}","{images_url}","{images_url}","{name}","{productionplace}","{typeid}","{brand_id}","{warehouse_id}","{amount}","{costprice}","{saleprice}",
+                            "{goodsdesc}",1,1,"{goodsWeights}","{goods_weight}","{spec_id}","{inquiry}","{urlKey}","{metaTitle}","{metaKeywords}","{metaDescription}","{minBuyCount}","{goodsno}")"""
+                Mysql().dml(con, cur, insert_sql)
+                success += 1
+            except IntegrityError:
+                print('已存在该商品')
+                erro += 1
+                erro_info = f'出错啦，id为{sku}'
+                Common().erro_log(log_path=r'../log/add_goods_by_sql_log', erro_info=erro_info)
+            finally:
+                print(f'第{n}次操作完成,共存在{erro}次错误,成功{success}次')
+                print(f'分割线'.center(60, '-'))
         Mysql().close(con, cur)
         Mysql().close(local_con,local_cur)
+
 if __name__ == '__main__':
     a = Add_Goods()
-    a.insert_by_sql()
-    # a.main()
+    # a.insert_by_sql()
+    a.main()
     # a.check_requests()

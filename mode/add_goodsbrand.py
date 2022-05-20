@@ -7,7 +7,7 @@ from Data_import.common.Common import Common
 from Data_import.mode.login import Login
 from Data_import.data.read_data import Read_data
 from Data_import.mysql.mysql import Mysql
-from pachong1.userAgent import UserAgent
+from Data_import.mode.userAgent import UserAgent
 
 
 class Add_Goodsbrand:

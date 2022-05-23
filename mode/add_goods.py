@@ -6,6 +6,7 @@ import os
 
 from faker import Faker
 from pymysql import IntegrityError
+from pymysql.converters import escape_string
 
 from Data_import.common.Common import Common
 from Data_import.mode.login import Login
@@ -92,12 +93,20 @@ class Add_Goods:
 
     def main(self):
         faker = Faker()
+        local_table = 'product_data_1'  # 定位表名
+        okmarts_table = "goods"
+        con, cur = Mysql().con_db(user="root", pwd="OKmarts888.,", host="18.118.13.94", db="okmarts", port=3306)
+        local_con, local_cur = Mysql().con_db(user='root', pwd="root", host='localhost', db='goodspic', port=3306)
         try:
             os.remove('../log/add_goods_log')  # 删除先前日志文件
         except FileNotFoundError:
             pass
-        local_con, local_cur = Mysql().con_db(user='root', pwd="root", host='localhost', db='goodspic', port=3306)
-        sql = 'select * from product_data_1 limit 1925,9000;'
+        local_number_sql = f'select id from {okmarts_table}'       #查看线上数据库存在多少条数据
+        start_local = len(Mysql().dql(cur,local_number_sql))      #起始数据量
+        print(start_local)
+        end_local = 10000 - start_local     #结束位置
+
+        sql = f'select * from {local_table} limit {start_local},{end_local};'
         infos = Mysql().dql(local_cur, sql)  # 查询所有商品数据
         print(len(infos))
         success = 0  # 计算成功数量
@@ -143,10 +152,12 @@ class Add_Goods:
                     saleprice = 1
 
                 goodsdesc = info['product_description']
+                goodsdesc = escape_string(goodsdesc)
 
                 inquiry = info['is_quote']
 
                 metaDescription = info['meta_description']
+                metaDescription = escape_string(metaDescription)
 
                 metaKeywords = info['meta_keywords']
 
@@ -182,6 +193,7 @@ class Add_Goods:
             finally:
                 print(f'第{n}次操作完成,共存在{erro}次错误,成功{success}次')
                 print(f'分割线'.center(60, '-'))
+        Mysql().close(con, cur)
         Mysql().close(local_con, local_cur)
 
     def create_goodstable(self):
@@ -320,9 +332,18 @@ class Add_Goods:
             os.remove('../log/add_goods_by_sql_log')  # 删除先前日志文件
         except FileNotFoundError:
             pass
+        local_table = 'product_data_1'  # 定位表名
+        okmarts_table = "goods"
+
         con, cur = Mysql().con_db(user="root", pwd="OKmarts888.,", host="18.118.13.94", db="okmarts", port=3306)
         local_con, local_cur = Mysql().con_db(user='root', pwd="root", host='localhost', db='goodspic', port=3306)
-        sql = 'select * from product_data_1 limit 1723,9000;'
+
+        local_number_sql = f'select id from {okmarts_table}'  # 查看线上数据库存在多少条数据
+        start_local = len(Mysql().dql(cur, local_number_sql))  # 起始数据量
+        print(start_local)
+        end_local = 10000 - start_local  # 结束位置
+
+        sql = f'select * from {local_table} limit {start_local},{end_local};'
         faker = Faker()
         infos = Mysql().dql(local_cur, sql)  # 查询所有商品数据
         success = 0  # 计算成功数量
@@ -366,10 +387,12 @@ class Add_Goods:
                 saleprice = 0.00001
 
             goodsdesc = info['product_description']
+            goodsdesc = escape_string(goodsdesc)
 
             inquiry = info['is_quote']
 
             metaDescription = info['meta_description']
+            metaDescription = escape_string(metaDescription)
 
             metaKeywords = info['meta_keywords']
 
@@ -412,6 +435,6 @@ class Add_Goods:
 
 if __name__ == '__main__':
     a = Add_Goods()
-    # a.insert_by_sql()
-    a.main()
+    a.insert_by_sql()
+    # a.main()
     # a.check_requests()

@@ -3,9 +3,10 @@
 """
 import json
 import os
+import time
 
 from faker import Faker
-from pymysql import IntegrityError
+from pymysql import IntegrityError, ProgrammingError, OperationalError
 from pymysql.converters import escape_string
 
 from Data_import.common.Common import Common
@@ -91,110 +92,138 @@ class Add_Goods:
         print(res.json())
         return res, data
 
-    def main(self):
+    def add_goods_by_requests(self, num):
+        """
+        通过接口添加商品数据
+        :param num: 第几个表
+        :return:
+        """
+        start_time = time.time()
         faker = Faker()
-        local_table = 'product_data_1'  # 定位表名
+        success = 0  # 计算成功数量
+        erro = 0  # 计算失败数量
+        n = 0  # 计算测试所在位置
+        local_table = f'product_data_{num}'  # 定位表名
         okmarts_table = "goods"
         con, cur = Mysql().con_db(user="root", pwd="OKmarts888.,", host="18.118.13.94", db="okmarts", port=3306)
         local_con, local_cur = Mysql().con_db(user='root', pwd="root", host='localhost', db='goodspic', port=3306)
+
         try:
             os.remove('../log/add_goods_log')  # 删除先前日志文件
         except FileNotFoundError:
             pass
-        local_number_sql = f'select id from {okmarts_table}'       #查看线上数据库存在多少条数据
-        start_local = len(Mysql().dql(cur,local_number_sql))      #起始数据量
-        print(start_local)
-        end_local = 10000 - start_local     #结束位置
 
-        sql = f'select * from {local_table} limit {start_local},{end_local};'
-        infos = Mysql().dql(local_cur, sql)  # 查询所有商品数据
-        print(len(infos))
-        success = 0  # 计算成功数量
-        erro = 0  # 计算失败数量
-        n = 0  # 计算测试所在位置
-        for info in infos:
-            try:
-                n += 1
+        local_number_sql = f'select id from {okmarts_table}'  # 查看线上数据库存在多少条数据
+        local_number = len(Mysql().dql(cur, local_number_sql))
+        print(f'线上存在{local_number}条数据')
 
-                query_spec_id = 'SELECT id FROM goods_spec ORDER BY RAND() LIMIT 1;'
-                spec_id = Mysql().dql(local_cur, query_spec_id)[0]['id']
+        start_local = 10000 - (num * 10000 - local_number)  # 起始数据量
+        if start_local < 0:
+            n, success, erro = self.check_erro_and_repair(local_cur, con, cur, num, faker, n, success, erro)
+            local_number = len(Mysql().dql(cur, local_number_sql))  # 再次查看线上数据库存在多少条数据
+            start_local = 10000 - (num * 10000 - local_number)  # 起始数据量
+        else:
+            pass
 
-                spec_Value = faker.ean13()
+        print(f'起始位置为{start_local}')
 
-                images = info['img']
-                print(images)
-                if images is None:
-                    images = ''
-                images_url = 'https://okmarts.com/pub/media/catalog/product/cache/738c201810d2c9c0374e9315f59a743f' + images
+        end_local = 10000 - start_local  # 结束位置
+        print(f'结束位置为{end_local}')
 
+        try:
+            sql = f'select * from {local_table} limit {start_local},{end_local};'
+            infos = Mysql().dql(local_cur, sql)  # 查询所有商品数据
+            print(len(infos))
 
-                name = info['product_name']
+            for info in infos:
+                try:
+                    n += 1
 
-                productionplace = faker.country()
+                    query_spec_id = 'SELECT id FROM goods_spec ORDER BY RAND() LIMIT 1;'
+                    spec_id = Mysql().dql(local_cur, query_spec_id)[0]['id']
 
-                typename = info['category_name']
-                query_type_id = f'select typeid from typeid_typeone where typeone="{typename}";'
-                typeid = Mysql().dql(local_cur, query_type_id)[0]['typeid']
+                    spec_Value = faker.ean13()
 
-                brand_name = info['brand_name']
-                query_brand_id = f'select brand_id from brand_id_name where brand_name="{brand_name}"'
-                brand_id = Mysql().dql(local_cur, query_brand_id)[0]['brand_id']
+                    images = info['img']
+                    # print(images)
+                    if images is None:
+                        images = ''
+                    images_url = 'https://okmarts.com/pub/media/catalog/product/cache/738c201810d2c9c0374e9315f59a743f' + images
 
-                query_warehouse_id = 'select id from warehouse order by RAND() LIMIT 1;'
-                warehouse_id = Mysql().dql(local_cur, query_warehouse_id)[0]['id']
+                    name = info['product_name']
 
-                costprice = info['cost_price']
-                if float(costprice) == 0:
-                    costprice = 1
+                    productionplace = faker.country()
 
-                saleprice = info['price']
-                if float(saleprice) == 0:
-                    saleprice = 1
+                    typename = info['category_name']
+                    query_type_id = f'select typeid from typeid_typeone where typeone="{typename}";'
+                    typeid = Mysql().dql(local_cur, query_type_id)[0]['typeid']
 
-                goodsdesc = info['product_description']
-                goodsdesc = escape_string(goodsdesc)
+                    brand_name = info['brand_name']
+                    query_brand_id = f'select brand_id from brand_id_name where brand_name="{brand_name}"'
+                    brand_id = Mysql().dql(local_cur, query_brand_id)[0]['brand_id']
 
-                inquiry = info['is_quote']
+                    query_warehouse_id = 'select id from warehouse order by RAND() LIMIT 1;'
+                    warehouse_id = Mysql().dql(local_cur, query_warehouse_id)[0]['id']
 
-                metaDescription = info['meta_description']
-                metaDescription = escape_string(metaDescription)
+                    costprice = info['cost_price']
+                    if float(costprice) == 0:
+                        costprice = 1
 
-                metaKeywords = info['meta_keywords']
+                    saleprice = info['price']
+                    if float(saleprice) == 0:
+                        saleprice = 1
 
-                metaTitle = info['meta_title']
+                    goodsdesc = info['product_description']
+                    goodsdesc = escape_string(goodsdesc)
 
-                urlKey = info['url_t']
+                    inquiry = info['is_quote']
 
-                amount = info['qty']
-                print(type(amount))
-                if amount == 0:
-                    amount = 1
+                    metaDescription = info['meta_description']
+                    metaDescription = escape_string(metaDescription)
 
-                minBuyCount = info['min_sale_qty']
+                    metaKeywords = info['meta_keywords']
 
-                sku = info['sku']
+                    metaTitle = info['meta_title']
 
-                goods_weight = info['weight']  # 重量
+                    urlKey = info['url_t']
 
-                goodsWeights = int(info['position']) - 200
+                    amount = info['qty']
+                    # print(type(amount))
+                    if amount == 0:
+                        amount = 1
 
-                res = self.add_goods(specId=spec_id, specValue=spec_Value, isrecommend=1, status=1, goodsimages=images_url, sku=sku, goods_weight=goods_weight,
-                                     goodsWeights=goodsWeights, metaDescription=metaDescription, metaKeywords=metaKeywords, metaTitle=metaTitle, urlKey=urlKey,
-                                     goodsimagem=images_url, goodsimagel=images_url, name=name, productionplace=productionplace, typeid=typeid, brandid=brand_id,
-                                     warehouseid=warehouse_id, amount=amount, costprice=costprice, saleprice=saleprice, goodsdesc=goodsdesc, inquiry=inquiry,
-                                     minBuyCount=minBuyCount)
-                assert '操作成功' in res[0].json()['message']
-                success += 1
-            except AssertionError:
-                erro_info = f'商品添加模块，第{n}条数据错误, 错误信息为: {res[0].json()["message"]} ,data 为{res[1]}   \n'
-                print(erro_info)
-                Common().erro_log(log_path=r'../log/add_goods_log', erro_info=erro_info)
-                erro += 1
-            finally:
-                print(f'第{n}次操作完成,共存在{erro}次错误,成功{success}次')
-                print(f'分割线'.center(60, '-'))
-        Mysql().close(con, cur)
-        Mysql().close(local_con, local_cur)
+                    minBuyCount = info['min_sale_qty']
+
+                    sku = info['sku']
+
+                    goods_weight = info['weight']  # 重量
+
+                    goodsWeights = int(info['position']) - 200
+
+                    res = self.add_goods(specId=spec_id, specValue=spec_Value, isrecommend=1, status=1, goodsimages=images_url, sku=sku, goods_weight=goods_weight,
+                                         goodsWeights=goodsWeights, metaDescription=metaDescription, metaKeywords=metaKeywords, metaTitle=metaTitle, urlKey=urlKey,
+                                         goodsimagem=images_url, goodsimagel=images_url, name=name, productionplace=productionplace, typeid=typeid, brandid=brand_id,
+                                         warehouseid=warehouse_id, amount=amount, costprice=costprice, saleprice=saleprice, goodsdesc=goodsdesc, inquiry=inquiry,
+                                         minBuyCount=minBuyCount)
+                    assert '操作成功' in res[0].json()['message']
+                    success += 1
+                except AssertionError:
+                    erro_info = f'商品添加模块，第{n}条数据错误, 错误信息为: {res[0].json()["message"]} ,data 为{res[1]}   \n'
+                    print(erro_info)
+                    Common().erro_log(log_path=r'../log/add_goods_log', erro_info=erro_info)
+                    erro += 1
+                finally:
+                    print(f'第{n}次操作完成,共存在{erro}次错误,成功{success}次')
+                    print(f'分割线'.center(60, '-'))
+            Mysql().close(con, cur)
+            Mysql().close(local_con, local_cur)
+            end_time = time.time()
+            cost_time = end_time - start_time
+            time_info = f'表{num}添加完成，共{end_local}条数据，总共费时{round(cost_time, 2)}秒  \n'
+            Common().erro_log(log_path=fr'../log/add_goods_by_sql_log_{num}', erro_info=time_info)
+        except ProgrammingError:
+            print('该数据已添加完成，请检查参数 num ')
+        return False
 
     def create_goodstable(self):
         """
@@ -255,7 +284,7 @@ class Add_Goods:
         con, cur = Mysql().con_db(user="root", pwd="OKmarts888.,", host="18.118.13.94", db="okmarts", port=3306)
 
         clear_type_sql = 'TRUNCATE TABLE typeid_typeone'
-        clear_brand_sql =  'TRUNCATE TABLE brand_id_name'
+        clear_brand_sql = 'TRUNCATE TABLE brand_id_name'
         clear_warehouse_sql = 'TRUNCATE TABLE warehouse'
         clear_goods_spec_sql = 'TRUNCATE TABLE goods_spec'
 
@@ -274,12 +303,12 @@ class Add_Goods:
             Mysql().dml(local_con, local_cur, insert_type)
 
         sql_brand = 'select name,id from goods_brand'
-        brands = Mysql().dql(cur,sql_brand)
+        brands = Mysql().dql(cur, sql_brand)
 
         for brand in brands:
             print(brand)
             insert_brand = f"""insert into brand_id_name(brand_id,brand_name) value('{brand["id"]}','{brand["name"]}')"""
-            Mysql().dml(local_con,local_cur,insert_brand)
+            Mysql().dml(local_con, local_cur, insert_brand)
 
         sql_warehouse = 'select id,name from warehouse'
         warehouses = Mysql().dql(cur, sql_warehouse)
@@ -289,7 +318,7 @@ class Add_Goods:
             Mysql().dml(local_con, local_cur, insert_warehouse)
 
         sql_goods_spec = 'select id,name from goods_spec'
-        specs = Mysql().dql(cur,sql_goods_spec)
+        specs = Mysql().dql(cur, sql_goods_spec)
         for spec in specs:
             print(spec)
             insert_specs = f"""insert into goods_spec(id,spec_name) value('{spec["id"]}','{spec["name"]}')"""
@@ -306,135 +335,242 @@ class Add_Goods:
                    'User-Agent': f'{self.useragent}',
                    'Content-Type': 'application/json', 'Origin': 'http://18.118.13.94', 'Referer': 'http://18.118.13.94/',
                    'Accept-Encoding': 'gzip,deflate', 'Accept-Language': 'zh-CN,zh;q=0.9'}
-        data ={"speciArr": [{"specId": "1503307464130658305", "specValue": "7156015379150"}],
-               "isrecommend": "1", "status": "1", "inquiry": "1",
-               "metaDescription": "Supply of Berger Lahr Servo Motor IFS93/2DPOISDS/1DI-I54/O-001RPP41, Berger Lahr HDS05.2-W300N-HS12-01-FW, Berger Lahr Servo Drive, Berger Lahr Servo Product from Okmarts industrial supply, which provides professional solution for your business.",
-               "metaKeywords": "IFS93/2DPOISDS/1DI-I54/O-001RPP41,Servo IFS93/2DPOISDS/1DI-I54/O-001RPP41,Servo Motor IFS93/2DPOISDS/1DI-I54/O-001RPP41,Berger Lahr Servo Motor IFS93/2DPOISDS/1DI-I54/O-001RPP41,Berger Lahr IFS93/2DPOISDS/1DI-I54/O-001RPP41",
-               "metaTitle": "Berger Lahr Servo Motor IFS93/2DPOISDS/1DI-I54/O-001RPP41 - Berger Lahr Servo Drive - Berger Lahr Servo Product - Okmarts Supply",
-               "urlKey": "berger-lahr-servo-motor-ifs93-2dpoisds-1di-i54-o-001rpp41.html",
-               "goodsimages": "https://okmarts.com/pub/media/catalog/product/cache/738c201810d2c9c0374e9315f59a743f/i/f/ifs93-2dpoisds-1di-i54-o-001rpp41.jpg",
-               "goodsimagem": "https://okmarts.com/pub/media/catalog/product/cache/738c201810d2c9c0374e9315f59a743f/i/f/ifs93-2dpoisds-1di-i54-o-001rpp41.jpg",
-               "goodsimagel": "https://okmarts.com/pub/media/catalog/product/cache/738c201810d2c9c0374e9315f59a743f/i/f/ifs93-2dpoisds-1di-i54-o-001rpp41.jpg",
-               "name": "Berger Lahr Servo Motor IFS93/2DPOISDS/1DI-I54/O-001RPP41", "productionplace": "Guyana", "typeid": "1527198271380049921",
-               "brandid": "1527198427273940994", "warehouseid": "1503306510501117953", "amount": "800", "costprice": "32099", "saleprice": "12346",
-               "minBuyCount": "1", "goodsdesc": "<p>The Berger Lahr Servo Motor is high quality!</p>", "goods_weight": "10.0", "sku": "BLSM-004", "goodsWeights": "0"}
+        data = {"speciArr": [{"specId": "1503307464130658305", "specValue": "7156015379150"}],
+                "isrecommend": "1", "status": "1", "inquiry": "1",
+                "metaDescription": "Supply of Berger Lahr Servo Motor IFS93/2DPOISDS/1DI-I54/O-001RPP41, Berger Lahr HDS05.2-W300N-HS12-01-FW, Berger Lahr Servo Drive, Berger Lahr Servo Product from Okmarts industrial supply, which provides professional solution for your business.",
+                "metaKeywords": "IFS93/2DPOISDS/1DI-I54/O-001RPP41,Servo IFS93/2DPOISDS/1DI-I54/O-001RPP41,Servo Motor IFS93/2DPOISDS/1DI-I54/O-001RPP41,Berger Lahr Servo Motor IFS93/2DPOISDS/1DI-I54/O-001RPP41,Berger Lahr IFS93/2DPOISDS/1DI-I54/O-001RPP41",
+                "metaTitle": "Berger Lahr Servo Motor IFS93/2DPOISDS/1DI-I54/O-001RPP41 - Berger Lahr Servo Drive - Berger Lahr Servo Product - Okmarts Supply",
+                "urlKey": "berger-lahr-servo-motor-ifs93-2dpoisds-1di-i54-o-001rpp41.html",
+                "goodsimages": "https://okmarts.com/pub/media/catalog/product/cache/738c201810d2c9c0374e9315f59a743f/i/f/ifs93-2dpoisds-1di-i54-o-001rpp41.jpg",
+                "goodsimagem": "https://okmarts.com/pub/media/catalog/product/cache/738c201810d2c9c0374e9315f59a743f/i/f/ifs93-2dpoisds-1di-i54-o-001rpp41.jpg",
+                "goodsimagel": "https://okmarts.com/pub/media/catalog/product/cache/738c201810d2c9c0374e9315f59a743f/i/f/ifs93-2dpoisds-1di-i54-o-001rpp41.jpg",
+                "name": "Berger Lahr Servo Motor IFS93/2DPOISDS/1DI-I54/O-001RPP41", "productionplace": "Guyana", "typeid": "1527198271380049921",
+                "brandid": "1527198427273940994", "warehouseid": "1503306510501117953", "amount": "800", "costprice": "32099", "saleprice": "12346",
+                "minBuyCount": "1", "goodsdesc": "<p>The Berger Lahr Servo Motor is high quality!</p>", "goods_weight": "10.0", "sku": "BLSM-004", "goodsWeights": "0"}
         data = json.dumps(data)
         print(data)
         res = self.sess.post(url=url, headers=headers, data=data)
         print(res.json())
 
-    def insert_by_sql(self):
+    def insert_by_sql(self, num):
         """
+        :param num: 表述第几张表
         通过SQL语言直接插入数据库
         :return:
         """
-        try:
-            os.remove('../log/add_goods_by_sql_log')  # 删除先前日志文件
-        except FileNotFoundError:
-            pass
-        local_table = 'product_data_1'  # 定位表名
+
+        start_time = time.time()
+        faker = Faker()
+        success = 0  # 计算成功数量
+        erro = 0  # 计算失败数量
+        n = 0  # 计算测试所在位置
+
+        # try:
+        #     os.remove(f'../log/add_goods_by_sql_log_{num}')  # 删除先前日志文件
+        # except FileNotFoundError:
+        #     pass
+        local_table = f'product_data_{num}'  # 定位表名
         okmarts_table = "goods"
 
         con, cur = Mysql().con_db(user="root", pwd="OKmarts888.,", host="18.118.13.94", db="okmarts", port=3306)
         local_con, local_cur = Mysql().con_db(user='root', pwd="root", host='localhost', db='goodspic', port=3306)
 
         local_number_sql = f'select id from {okmarts_table}'  # 查看线上数据库存在多少条数据
-        start_local = len(Mysql().dql(cur, local_number_sql))  # 起始数据量
-        print(start_local)
+        local_number = len(Mysql().dql(cur, local_number_sql))
+        print(f'线上存在{local_number}条数据')
+
+        start_local = 10000 - (num * 10000 - local_number)  # 起始数据量
+        if start_local < 0:
+            n, success, erro = self.check_erro_and_repair(local_cur, con, cur, num, faker, n, success, erro)
+            local_number = len(Mysql().dql(cur, local_number_sql))  # 再次查看线上数据库存在多少条数据
+            start_local = 10000 - (num * 10000 - local_number)  # 起始数据量
+        else:
+            pass
+
+        print(f'起始位置为{start_local}')
+
         end_local = 10000 - start_local  # 结束位置
+        print(f'结束位置为{end_local}')
 
-        sql = f'select * from {local_table} limit {start_local},{end_local};'
-        faker = Faker()
-        infos = Mysql().dql(local_cur, sql)  # 查询所有商品数据
-        success = 0  # 计算成功数量
-        erro = 0  # 计算失败数量
-        n = 0  # 计算测试所在位置
+        try:
+            sql = f'select * from {local_table} limit {start_local},{end_local};'
+            infos = Mysql().dql(local_cur, sql)  # 查询所有商品数据
+
+            for info in infos:
+                n, success, erro = self.mode(info, n, success, erro, local_cur, faker, con, cur, num)
+            Mysql().close(con, cur)
+            Mysql().close(local_con, local_cur)
+            end_time = time.time()
+            cost_time = end_time - start_time
+            time_info = f'表{num}添加完成，共{end_local}条数据，总共费时{round(cost_time, 2)}秒  \n'
+            Common().erro_log(log_path=fr'../log/add_goods_by_sql_log_{num}', erro_info=time_info)
+        except ProgrammingError:
+            print('该数据已添加完成，请检查参数 num ')
+        return False
+
+    def add_by_sql_main(self):
+        for i in range(1, 80):
+            false = True
+            while false:
+                try:
+                    print(i)
+                    false = self.insert_by_sql(i)
+                except TimeoutError:
+                    print('链接异常，再次尝试')
+                    Common().erro_log(log_path=fr'../log/add_goods_by_sql_log_{i}', erro_info="TimeoutError \n")
+                except OperationalError:
+                    print('链接异常，再次尝试')
+                    Common().erro_log(log_path=fr'../log/add_goods_by_sql_log_{i}', erro_info="OperationalError \n")
+                finally:
+                    print(f'false为{false}')
+                    print(f'false 参数有类型为{type(false)}')
+
+    def add_by_requests_main(self):
+        for i in range(1, 80):
+            false = True
+            while false:
+                try:
+                    print(i)
+                    false = self.add_goods_by_requests(i)
+                except TimeoutError:
+                    print('链接异常，再次尝试')
+                    Common().erro_log(log_path=fr'../log/add_goods_by_requests_log_{i}', erro_info="TimeoutError \n")
+                except OperationalError:
+                    print('链接异常，再次尝试')
+                    Common().erro_log(log_path=fr'../log/add_goods_by_requests_log_{i}', erro_info="OperationalError \n")
+                finally:
+                    print(f'false为{false}')
+                    print(f'false 参数有类型为{type(false)}')
+
+    def check_erro_and_repair(self, local_cur, con, cur, num, faker, n, success, erro):
+        """
+        检查漏加的数据，然后进行添加,修复问题
+        :param local_cur: 本地cur
+        :param con: 线上con
+        :param cur: 线上cur
+        :param num: 第几个表
+        :param faker:
+        :param n: 计数
+        :param success:计算成功个数
+        :param erro: 计算失败个数
+        :return:
+        """
+        sql = f'select product_name from product_data_{num}'
+        infos = Mysql().dql(local_cur, sql)
         for info in infos:
-            n += 1
-            print(info)
-            query_spec_id = 'SELECT id FROM goods_spec ORDER BY RAND() LIMIT 1;'
-            spec_id = Mysql().dql(local_cur, query_spec_id)[0]['id']
-
-            spec_Value = faker.ean13()
-
-            images = info['img']
-            if images is None:
-                images_url = ''
-            else:
-                images_url = 'https://okmarts.com/pub/media/catalog/product/cache/738c201810d2c9c0374e9315f59a743f' + images
-
+            # print(info)
             name = info['product_name']
-
-            productionplace = faker.country()
-
-            typename = info['category_name']
-            query_type_id = f'select typeid from typeid_typeone where typeone="{typename}";'
-            typeid = Mysql().dql(local_cur, query_type_id)[0]['typeid']
-
-            brand_name = info['brand_name']
-            query_brand_id = f'select brand_id from brand_id_name where brand_name="{brand_name}"'
-            brand_id = Mysql().dql(local_cur, query_brand_id)[0]['brand_id']
-
-            query_warehouse_id = 'select id from warehouse order by RAND() LIMIT 1;'
-            warehouse_id = Mysql().dql(local_cur, query_warehouse_id)[0]['id']
-
-            costprice = info['cost_price']
-            if float(costprice) == 0:
-                costprice = 0.00001
-
-            saleprice = info['price']
-            if float(saleprice) == 0:
-                saleprice = 0.00001
-
-            goodsdesc = info['product_description']
-            goodsdesc = escape_string(goodsdesc)
-
-            inquiry = info['is_quote']
-
-            metaDescription = info['meta_description']
-            metaDescription = escape_string(metaDescription)
-
-            metaKeywords = info['meta_keywords']
-
-            metaTitle = info['meta_title']
-
-            urlKey = info['url_t']
-
-            amount = info['qty']
-
-            if amount == 0:
-                amount = 1
-
-            minBuyCount = info['min_sale_qty']
-
-            sku = info['sku']
-
-            goods_weight = info['weight']  # 重量
-
-            goodsWeights = int(info['position']) - 200
-
-            goodsno = faker.ean13()
-
+            sql1 = f'select id from goods where name="{name}"'
+            goods = Mysql().dql(cur, sql1)
             try:
-                insert_sql = f"""insert into goods(id,goodsImageS,goodsImageM,goodsImageL,name,productionPlace,typeid,brandid,warehouseid,amount,costPrice,salePrice,
-                            goodsDesc,isRecommend,status,goodsWeights,goods_weight,specid,inquiry,url_key,meta_title,meta_keywords,meta_description,min_buy_count,goodsno) 
-                            value("{sku}","{images_url}","{images_url}","{images_url}","{name}","{productionplace}","{typeid}","{brand_id}","{warehouse_id}","{amount}","{costprice}","{saleprice}",
-                            "{goodsdesc}",1,1,"{goodsWeights}","{goods_weight}","{spec_id}","{inquiry}","{urlKey}","{metaTitle}","{metaKeywords}","{metaDescription}","{minBuyCount}","{goodsno}")"""
-                Mysql().dml(con, cur, insert_sql)
-                success += 1
-            except IntegrityError:
-                print('已存在该商品')
-                erro += 1
-                erro_info = f'出错啦，id为{sku}'
-                Common().erro_log(log_path=r'../log/add_goods_by_sql_log', erro_info=erro_info)
-            finally:
-                print(f'第{n}次操作完成,共存在{erro}次错误,成功{success}次')
-                print(f'分割线'.center(60, '-'))
-        Mysql().close(con, cur)
-        Mysql().close(local_con,local_cur)
+                ids = goods[0]['id']
+                print(ids)
+            except IndexError:
+                print(name)
+                sql_2 = f'select * from product_data_{num} where product_name="{name}"'
+                res = Mysql().dql(local_cur, sql_2)
+                n, success, erro = self.mode(res[0], n, success, erro, local_cur, faker, con, cur, 2)
+        return n, success, erro
+
+    def mode(self, info, n, success, erro, local_cur, faker, con, cur, num):
+        """
+        使用sql加入时的数据
+        :param info: 数据
+        :param n: 次数
+        :param success:成功的次数
+        :param erro: 错误的次数
+        :param local_cur: 本地数据库
+        :param faker: faker
+        :param con: 线上数据库
+        :param cur: 线上数据库
+        :param num: 第几张表
+        :return:
+        """
+        n += 1
+        print(info)
+        query_spec_id = 'SELECT id FROM goods_spec ORDER BY RAND() LIMIT 1;'
+        spec_id = Mysql().dql(local_cur, query_spec_id)[0]['id']
+
+        spec_Value = faker.ean13()
+
+        images = info['img']
+        if images is None:
+            images_url = ''
+        else:
+            images_url = 'https://okmarts.com/pub/media/catalog/product/cache/738c201810d2c9c0374e9315f59a743f' + images
+
+        name = info['product_name']
+
+        productionplace = faker.country()
+
+        typename = info['category_name']
+        query_type_id = f'select typeid from typeid_typeone where typeone="{typename}";'
+        typeid = Mysql().dql(local_cur, query_type_id)[0]['typeid']
+
+        brand_name = info['brand_name']
+        query_brand_id = f'select brand_id from brand_id_name where brand_name="{brand_name}"'
+        brand_id = Mysql().dql(local_cur, query_brand_id)[0]['brand_id']
+
+        query_warehouse_id = 'select id from warehouse order by RAND() LIMIT 1;'
+        warehouse_id = Mysql().dql(local_cur, query_warehouse_id)[0]['id']
+
+        costprice = info['cost_price']
+        if float(costprice) == 0:
+            costprice = 0.00001
+
+        saleprice = info['price']
+        if float(saleprice) == 0:
+            saleprice = 0.00001
+
+        goodsdesc = info['product_description']
+        goodsdesc = escape_string(goodsdesc)
+
+        inquiry = info['is_quote']
+
+        metaDescription = info['meta_description']
+        metaDescription = escape_string(metaDescription)
+
+        metaKeywords = info['meta_keywords']
+
+        metaTitle = info['meta_title']
+
+        urlKey = info['url_t']
+
+        amount = info['qty']
+
+        if amount == 0:
+            amount = 1
+
+        minBuyCount = info['min_sale_qty']
+
+        sku = info['sku']
+
+        goods_weight = info['weight']  # 重量
+
+        goodsWeights = int(info['position']) - 200
+
+        goodsno = faker.ean13()
+
+        try:
+            insert_sql = f"""insert into goods(id,goodsImageS,goodsImageM,goodsImageL,name,productionPlace,typeid,brandid,warehouseid,amount,costPrice,salePrice,
+                                                goodsDesc,isRecommend,status,goodsWeights,goods_weight,specid,inquiry,url_key,meta_title,meta_keywords,meta_description,min_buy_count,goodsno) 
+                                                value("{sku}","{images_url}","{images_url}","{images_url}","{name}","{productionplace}","{typeid}","{brand_id}","{warehouse_id}","{amount}","{costprice}","{saleprice}",
+                                                "{goodsdesc}",1,1,"{goodsWeights}","{goods_weight}","{spec_id}","{inquiry}","{urlKey}","{metaTitle}","{metaKeywords}","{metaDescription}","{minBuyCount}","{goodsno}")"""
+            Mysql().dml(con, cur, insert_sql)
+            success += 1
+        except IntegrityError:
+            print('已存在该商品')
+            erro += 1
+            erro_info = f'出错啦，id为{sku} \n'
+            Common().erro_log(log_path=fr'../log/add_goods_by_sql_log_{num}', erro_info=erro_info)
+        finally:
+            print(f'第{n}次操作完成,共存在{erro}次错误,成功{success}次')
+            print(f'分割线'.center(60, '-'))
+        return n, success, erro
+
 
 if __name__ == '__main__':
     a = Add_Goods()
-    a.insert_by_sql()
-    # a.main()
-    # a.check_requests()
+    a.add_by_sql_main()
+    # a.select_erro()
+    # a.add_by_requests_main()

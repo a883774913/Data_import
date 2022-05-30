@@ -290,7 +290,5 @@ class Add_Goodsbrand:
 
 if __name__ == '__main__':
     a = Add_Goodsbrand()
-    a.clear_goodsbrand()
     a.main()
-    a.add_level_4()
-    # a.check_erro(name='Blue-White')
+

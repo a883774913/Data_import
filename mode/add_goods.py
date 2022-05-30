@@ -268,7 +268,7 @@ class Add_Goods:
                              """
             cur.execute(sql_createTb)  # 提交请求
             print(f'表{name} 创建成功'.center(60, '-'))  # 检测是否建立成功，没有成功则报错
-            sql = f"""INSERT into {name} SELECT * FROM all_product_data ORDER BY product_id LIMIT {num},10000;"""  # 遍历查询原表数据 添加到新表，
+            sql = f"""INSERT into {name} SELECT * FROM all_product_data_new ORDER BY product_id LIMIT {num},10000;"""  # 遍历查询原表数据 添加到新表，
             Mysql().dml(con, cur, sql)  # 提交数据
             num += 10000  # 累加 下次查询下一万条数据
             print(f'表{name} 数据添加成功'.center(60, '-'))  # 检测是否添加成功，未添加成功则报错
@@ -415,12 +415,15 @@ class Add_Goods:
                 try:
                     print(i)
                     false = self.insert_by_sql(i)
-                except TimeoutError:
-                    print('链接异常，再次尝试')
+                except TimeoutError as e:
+                    print('TimeoutError链接异常，再次尝试')
                     Common().erro_log(log_path=fr'../log/add_goods_by_sql_log_{i}', erro_info="TimeoutError \n")
-                except OperationalError:
-                    print('链接异常，再次尝试')
+                    print(e)
+
+                except OperationalError as f:
+                    print('OperationalError链接异常，再次尝试')
                     Common().erro_log(log_path=fr'../log/add_goods_by_sql_log_{i}', erro_info="OperationalError \n")
+                    print(f)
                 finally:
                     print(f'false为{false}')
                     print(f'false 参数有类型为{type(false)}')
@@ -568,9 +571,18 @@ class Add_Goods:
             print(f'分割线'.center(60, '-'))
         return n, success, erro
 
+    def delete_table(self):
+        local_con, local_cur = Mysql().con_db(user='root', pwd="root", host='localhost', db='goodspic', port=3306)
+        for i  in range(1,80):
+            sql = f'drop table product_data_{i}'
+            Mysql().dml(local_con,local_cur,sql)
+        Mysql().close(local_con, local_cur)
+
 
 if __name__ == '__main__':
     a = Add_Goods()
-    a.add_by_sql_main()
+    # a.add_by_sql_main()
     # a.select_erro()
     # a.add_by_requests_main()
+    a.delete_table()
+    # a.create_goodstable()

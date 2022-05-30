@@ -1,8 +1,6 @@
 import json
 import os
-
 import xlrd
-
 from Data_import.common.Common import Common
 from Data_import.mode.login import Login
 from Data_import.mysql.mysql import Mysql
@@ -17,7 +15,8 @@ class Add_GoodsType:
                        'Accept': 'application/json,text/plain,*/*',
                        'X-TIMESTAMP': '20220222134727', 'X-Sign': '49E05B356F062A652820197CA172C44B', 'tenant-id': '0',
                        'X-Access-Token': f'{self.token}',
-                       'User-Agent': 'Mozilla/5.0(WindowsNT10.0;Win64;x64)AppleWebKit/537.36(KHTML,likeGecko)Chrome/98.0.4758.80Safari/537.36Edg/98.0.1108.50',
+                       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36 '
+                                     'Edg/101.0.1210.53',
                        'Content-Type': f'application/json;charset=UTF-8', 'Origin': 'http://18.118.13.94', 'Referer': 'http://18.118.13.94/',
                        'Accept-Encoding': 'gzip,deflate',
                        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6'}
@@ -41,8 +40,8 @@ class Add_GoodsType:
                 "metaKeywords": meta_keywords, "metaDescription": meta_description, "filePath": filePath}
         data = json.dumps(data)
         res = self.sess.post(url=url, headers=self.header, data=data)
-        print(res.json())
-        return res.json()
+        # print(res.json())
+        return res
 
     def clear_goodstype(self):
         # 删除类型表中的数据
@@ -51,8 +50,6 @@ class Add_GoodsType:
 
     def getFlist(self, file_path):
         for root, dirs, files in os.walk(file_path):
-            print('root_dir:', root)  # 获取当前目录地址
-            print('sub_dirs:', dirs)  # 获取目录
             print('files:', files)  # 获取文件名
         return files
 
@@ -74,10 +71,10 @@ class Add_GoodsType:
         file = {'file': (f'{name}', open(fr"{file_path}", 'rb'), "image/png")}
         data = {"size": "1"}
         res = sess.post(url=url, headers=headers, files=file, data=data)
-        print(res.json())
         try:
             assert res.json()['success'] is True
             pic_url = res.json()['message']
+            print(f'图片上传成功，图片地址为{pic_url}')
         except AssertionError:
             print('图片上传失败')
             pic_url = None
@@ -106,10 +103,10 @@ class Add_GoodsType:
                 res = self.add_goodstype(typeone=typename, desctext=info['description'], weight=0, url_key=info['url_key'],
                                          meta_title=info['meta_title'], meta_keywords=info['meta_keywords'], meta_description=info['meta_description'],
                                          filePath=pic_url)
-                assert '操作成功' in res['message']
+                assert '操作成功' in res.json()['message']
                 success += 1
             except:
-                erro_info = f'商品类型添加模块，第{n} 条数据错误，类型名称为{typename},错误信息为: {res["message"]} \n'
+                erro_info = f'商品类型添加模块，第{n} 条数据错误，类型名称为{typename},错误信息为: {res.json()["message"]} \n'
                 print(erro_info)
                 Common().erro_log(log_path=r'../log/add_type_log', erro_info=erro_info)
                 erro += 1
@@ -117,13 +114,13 @@ class Add_GoodsType:
                 print(f'第{n}次操作完成,共存在{erro}次错误,成功{success}次')
                 print('分割线'.center(60, '-'))
         Mysql().close(con, cur)
-        n, erro, success = self.add_type2(typeone='Servo Motor', erro=erro, n=n, success=success)  # 单独加入伺服类产品
-        n, erro, success = self.add_type2(typeone='Servo Drive', erro=erro, n=n, success=success)
-        n, erro, success = self.add_type2(typeone='Servo Valve', erro=erro, n=n, success=success)
+        self.add_type2(typeone='Servo Motor')  # 单独加入伺服类产品
+        self.add_type2(typeone='Servo Drive')
+        self.add_type2(typeone='Servo Valve')
 
     def get_pic_name(self, typeone):
         """
-        通过 typeone 获取 图片简称名称
+        通过 typeone 获取 图片简称名称 ，前提需要class_pic.xls 表中有此类型的记录
         :param typeone:
         :return:
         """
@@ -147,14 +144,14 @@ class Add_GoodsType:
         file_path = f'{os.getcwd()}\..\data\图标'
         file_list = self.getFlist(file_path)  # 获取目录下的所有文件名
         for file in file_list:
-            path = fr'C:\Users\admin\Desktop\图标\{file}'  # 获取文件地址
+            path = fr'{file_path}\{file}'  # 获取文件地址
             name = file.replace('icon_icon_', '').split('（')[0].split('(')[0]  # 获取图片名字方便区分记住
             # print(f'优化后名称为{name}')
             if name == pic_name:
                 print(f'图片地址为{path}')
                 return path
 
-    def add_type2(self, typeone, erro, n, success):
+    def add_type2(self, typeone):
         """
         单独添加类型专用
         :param typeone: 类型名称
@@ -163,28 +160,24 @@ class Add_GoodsType:
         :param success: 成功次数
         :return: n, erro, success
         """
-        n += 1
         try:
-            pic_name = self.get_pic_name(typeone=typeone)
-            pic_path = self.get_file_path(pic_name=pic_name)
-            pic_url = self.uplod_file(name=typeone, file_path=pic_path, token=self.token, sess=self.sess)
+            pic_name = self.get_pic_name(typeone=typeone)  # 通过类型名称定位到图标名字
+            pic_path = self.get_file_path(pic_name=pic_name)  # 通过图标名字定位到图标地址
+            pic_url = self.uplod_file(name=typeone, file_path=pic_path, token=self.token, sess=self.sess)  # 上传图片获取图片URL
             res = self.add_goodstype(typeone=typeone, desctext=typeone, weight=0, url_key='',
                                      meta_title='', meta_keywords='', meta_description='',
                                      filePath=pic_url)
-            assert '操作成功' in res['message']
-            success += 1
+            assert '操作成功' in res.json()['message']
+            print(f'类型：{typeone}添加成功')
         except:
-            erro_info = f'商品类型添加模块，第{n} 条数据错误,错误名称为{typeone}，错误信息为: {res["message"]} \n'
+            erro_info = f'类型:{typeone} 添加失败 , {res.json()["message"]} \n'
             print(erro_info)
             Common().erro_log(log_path=r'../log/add_type_log', erro_info=erro_info)
-            erro += 1
         finally:
-            print(f'第{n}次操作完成,共存在{erro}次错误,成功{success}次')
             print('分割线'.center(60, '-'))
-            return n, erro, success
+
 
 
 if __name__ == '__main__':
     a = Add_GoodsType()
-    a.clear_goodstype()
-    a.main()
+

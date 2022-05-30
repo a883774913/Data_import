@@ -1,3 +1,4 @@
+import json
 import random
 
 import requests
@@ -21,9 +22,10 @@ class Login:
                   'Content-Type': 'application/json',
                   'Accept-Encoding': 'gzip,deflate',
                   'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6'}
-        data = f'{{"username":"test","password":"Xx.888888","captcha":"0000","checkKey":"{ran_13}","remember_me' \
-               f'":"true"}} '
+        data = f'{{"username":"test","password":"Xx.888888","captcha":"0000","checkKey":"{ran_13}","remember_me":"true"}}'
+        # data= json.dumps(data)
         res = sess.post(url=URL, data=data, headers=header)
+        print(res.json()['message'])
         token = res.json()['result']['token']
         return sess, token
 

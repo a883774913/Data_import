@@ -25,15 +25,13 @@ class Mysql:
         cur.close()
         con.close()
 
-
-
     # 删除数据库数据
-    def drop_table(self,user,pwd,host,db,port,sql):
+    def drop_table(self, user, pwd, host, db, port, sql):
         con, cur = self.con_db(user=user, pwd=pwd, host=host, db=db, port=port)
         self.dml(con, cur, sql)
         self.close(con, cur)
 
-    def search_info(self,user,pwd,host,db,port,sql):
+    def search_info(self, user, pwd, host, db, port, sql):
         """
         数据库查询方法
         :param user:数据库用户名
@@ -44,9 +42,7 @@ class Mysql:
         :param sql: 查询语句
         :return:
         """
-        con,cur = self.con_db(user,pwd,host,db,port)
-        res = self.dql(cur,sql)
-        self.close(con,cur)
+        con, cur = self.con_db(user, pwd, host, db, port)
+        res = self.dql(cur, sql)
+        self.close(con, cur)
         return res
-
-

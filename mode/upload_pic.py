@@ -1,10 +1,5 @@
 import os
 
-import xlrd
-
-from Data_import.mode.login import Login
-from Data_import.mysql.mysql import Mysql
-
 
 class Upload_pic:
 
